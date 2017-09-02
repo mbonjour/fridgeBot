@@ -299,6 +299,41 @@ $app->state('EXAMPLE_NLP', function(Thread $thread, Message $message){
 	
 	
 		if(! $message->isTreated()){
+			$thread->send(new TextMessage(json_encode($message->getData()));
+			sleep(2);
+		}
+	
+	
+		// Envoi du résultat
+		$message = new TextMessage("Entrez un texte pour que je le copies ;)");
+		$message->addButton(new Button("Fini de jouer","DONE"));
+		$thread->send($message);
+	
+});
+	
+
+/*
+ * ETAT: test traitement de la demande
+ */
+ $app->state('ASK_MEAL', function(Thread $thread, Message $message){
+	
+	
+		/*
+		 * Important: vous devez avoir associé ces données à un compte API.ai
+		 * Contactez le TechBar pour la mettre en place
+		 * */
+	
+	
+		// Vérification du changement d'état, si ça n'a pas été traité avant
+		if($message instanceof CallbackMessage and ! $message->isTreated()){
+			if($message->getValue() === "DONE"){
+				$thread->moveAndLoadState("INTRO");
+				return; // Interruption
+			}
+		}
+	
+	
+		if(! $message->isTreated()){
 			$thread->send(new TextMessage($message))
 			sleep(2);
 		}
@@ -309,9 +344,7 @@ $app->state('EXAMPLE_NLP', function(Thread $thread, Message $message){
 		$message->addButton(new Button("Fini de jouer","DONE"));
 		$thread->send($message);
 	
-	});
-	
-
+});
 
 // Récupération de la requête
 $result = $app->run();
