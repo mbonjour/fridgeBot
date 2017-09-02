@@ -125,6 +125,9 @@ $app->state('EXAMPLES', function(Thread $thread, Message $message){
 		}elseif($message->getValue() === "NLP"){
 			$thread->moveAndLoadState("EXAMPLE_NLP");
 			return; // Interruption
+		}elseif($message->getValue() === "ASK"){
+			$thread->moveAndLoadState("ASK_MEAL");
+			return; // Interruption
 		}
 	}
 
@@ -135,6 +138,7 @@ $app->state('EXAMPLES', function(Thread $thread, Message $message){
 	$message->addButton(new Button("Une liste", "LIST"));
 	$message->addButton(new Button("Persistence", "DATA"));
 	$message->addButton(new Button("Langage naturel", "NLP"));
+	$message->addButton(new Button("Test", "ASK"));
 
 	$thread->send($message);
 
@@ -271,6 +275,42 @@ $app->state('EXAMPLE_NLP', function(Thread $thread, Message $message){
 
 });
 
+
+
+/*
+ * ETAT: AskMeal
+ */
+ $app->state('ASK_MEAL', function(Thread $thread, Message $message){
+	
+	
+		/*
+		 * Important: vous devez avoir associé ces données à un compte API.ai
+		 * Contactez le TechBar pour la mettre en place
+		 * */
+	
+	
+		// Vérification du changement d'état, si ça n'a pas été traité avant
+		if($message instanceof CallbackMessage and ! $message->isTreated()){
+			if($message->getValue() === "DONE"){
+				$thread->moveAndLoadState("INTRO");
+				return; // Interruption
+			}
+		}
+	
+	
+		if(! $message->isTreated()){
+			$thread->send(new TextMessage($message))
+			sleep(2);
+		}
+	
+	
+		// Envoi du résultat
+		$message = new TextMessage("Entrez un texte pour que je le copies ;)");
+		$message->addButton(new Button("Fini de jouer","DONE"));
+		$thread->send($message);
+	
+	});
+	
 
 
 // Récupération de la requête
