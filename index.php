@@ -18,6 +18,7 @@ use MessengersIO\Message\TextMessage;
 use MessengersIO\Thread;
 $config = json_decode(file_get_contents(__DIR__.'/conf.json'));
 $app = new App($config->apiKey);
+ini_set("allow_url_fopen", 1);
 /*///////////////////////////////////////////////////////////
 
    _____ _           ______ _         _   _            _
@@ -49,20 +50,22 @@ $app->setDefaultState("WELCOME");
  * Ceci est également l'état par défaut (car nommé comme ci-dessus)
  * Répondre un texte de bienvenue, et rediriger au niveau suivant
  */
-$app->state("WELCOME", function(Thread $thread,  Message $message){
+$app->state('WELCOME', function(Thread $thread,  Message $message){
+	if(!$message->isTreated()){	
+		$thread->moveAndLoadState("SPECIAL");
+		return;
+			
+	}
 
 	// On envoie directement une image
 	$thread->send(new ImageMessage("https://www.creageneve.com/wp-content/uploads/2017/07/bighack_cover_dev.jpg"));
 
 	// Création d'un texte
-	$answer = new TextMessage("Bienvenue au Big Hack!");
+	$answer = new TextMessage("Hey! I am the chef fridgeBot, I will help you find a good recipe for your leftover in your fridge");
 
-	// Ajout de deux boutons
-	$answer->addButton(new Button("Merci!"));
-	$answer->addButton(new Button("C'est parti"));
-
-	// Changer vers un autre état (appliqué lors d'un envoi de la réponse)
-	$thread->moveToState('INTRO');
+	$answer = new TextMessage("Are you hungry?");
+	$answer->addButton(new Button("I'm hungry!","HUNG"));
+	
 
 	// Envoi du texte
 	$thread->send($answer);
@@ -70,285 +73,72 @@ $app->state("WELCOME", function(Thread $thread,  Message $message){
 });
 
 
-/*
- * ETAT: INTRO
- *
- * - Présentation du lieu
- * - Demander que faire après
- */
-$app->state('INTRO', function(Thread $thread, Message $message){
-
-	// Vérification du changement d'état
+$app->state('SPECIAL', function(Thread $thread, Message $message){
 	if($message instanceof CallbackMessage){
-		if($message->getValue() === "TEAMS"){
-			$thread->moveAndLoadState("TEAMS")->send(new TextMessage("Moving to teams"));
-			return; // Interruption
-		}elseif($message->getValue() === "EXAMPLES"){
-			$thread->moveAndLoadState("EXAMPLES")->send(new TextMessage("Moving to examples"));
-			return; // Interruption
+		if($message->getValue() === "VEGE"){
+			$thread->setData("&health=vegetarian");
+			$thread->moveAndLoadState("HUNGRY");
+			return;
+		}
+		elseif($message->getValue() ==="GF"){
+			$thread->setData("&health=gluten-free");
+			$thread->moveAndLoadState("HUNGRY");
+			return;
+		}
+		elseif($message->getValue()=== "OK"){
+			$thread->setData("");
+			$thread->moveAndLoadState("HUNGRY");
+			return;	
+		}
+		else{
+			$thread->setData("");
+			
 		}
 	}
+	
+	$answer = new TextMessage("P.S: \"hungry\" is the magic word that allows you to restart from here");
+	$answer = new TextMessage("Do you have any preference about your alimentation? :)\nMore to come later");
 
-	// Affichage d'un lieu
-	$thread->send(new TextMessage("Vous êtes ici:"));
-	$thread->send(new LocationMessage(46.1912586,6.1303793));
-
-
-	// Envoi d'une suggestion de suite (traité ci-dessus)
-	$answer = new TextMessage("Que souhaites-tu faire?");
-
-	$answer->addButton(new Button("Faire les équipes","TEAMS")); // Le callback TEAMS est utilisé ci-dessus
-	$answer->addButton(new Button("Exemples","EXAMPLES")); // Le callback EXAMPLES aussi.
+	$answer->addButton(new Button("Vegetarian","VEGE"));
+	$answer->addButton(new Button("Gluten-free","GF"));
+	$answer->addButton(new Button("No, thanks","OK"));
 
 	$thread->send($answer);
 
-
 });
-
-
 /*
  * ETAT: EXAMPLES
  */
-$app->state('EXAMPLES', function(Thread $thread, Message $message){
+$app->state('HUNGRY', function(Thread $thread, Message $message){
+	
 
-	// Vérification du changement d'état, si ça n'a pas été traité avant
-	if($message instanceof CallbackMessage and ! $message->isTreated()){
-		if($message->getValue() === "CAROUSEL"){
-			$thread->moveAndLoadState("EXAMPLE_CAROUSEL");
-			return; // Interruption
-		}elseif($message->getValue() === "LIST"){
-			$thread->moveAndLoadState("EXAMPLE_LIST");
-			return; // Interruption
-		}elseif($message->getValue() === "DATA"){
-			$thread->moveAndLoadState("EXAMPLE_DATA");
-			return; // Interruption
-		}elseif($message->getValue() === "NLP"){
-			$thread->moveAndLoadState("EXAMPLE_NLP");
-			return; // Interruption
-		}elseif($message->getValue() === "ASK"){
-			$thread->moveAndLoadState("ASK_MEAL");
-			return; // Interruption
+	
+	if($message instanceof TextMessage and !$message->isTreated()){
+		if($message->getText() === "test"){
+			$thread->moveAndLoadState("WELCOME");
+			return;
 		}
+		if($message->getText() === "hungry"){
+			$thread->moveAndLoadState("SPECIAL");
+			return;
+		}
+		$searchOption = $thread->getData();
+		$json_string = file_get_contents("https://api.edamam.com/search?q=".$message->getText().$searchOption."&app_id=3db2da4d&app_key=fa39784d560d0f2ca6e95294ef79498f");
+		$fp = fopen('user-'.$thread->getId().'.json', 'w');
+		fwrite($fp, $json_string);
+		fclose($fp);
+
+    	//json string to array
+        $answer = json_decode($json_string, true);
+        //$thread->send(new TextMessage($answer['q']." ".$thread->getData()));
+        $thread->moveAndLoadState("GIVE_RESULTS");
+        return;
 	}
-
-	// On affiche les possibilités
-	$message = new TextMessage("Quel exemple voulez-vous afficher ?");
-
-	$message->addButton(new Button("Une galerie", "CAROUSEL"));
-	$message->addButton(new Button("Une liste", "LIST"));
-	$message->addButton(new Button("Persistence", "DATA"));
-	$message->addButton(new Button("Langage naturel", "NLP"));
-	$message->addButton(new Button("Test", "ASK"));
-
-	$thread->send($message);
-
+	$thread->send(new TextMessage("Please tell me what aliments you want to cook!\nP.S: write them in a single message, separated with only spaces."));
 });
 
-
-/*
- * ETAT: EXAMPLE_CAROUSEL
- */
-$app->state('EXAMPLE_CAROUSEL', function(Thread $thread, Message $message){
-
-	$gallery = new GalleryMessage();
-
-	$image1 = new Element("Titre A");
-	$image1->setText("Contenu A Contenu A Contenu A Contenu A Contenu A Contenu A Contenu A Contenu A Contenu A");
-	$image1->setImage("http://placehold.it/300x200?text=Image%20A");
-
-	$image2 = new Element("Titre B");
-	$image2->setText("Contenu B Contenu B Contenu B Contenu B Contenu B Contenu B Contenu B Contenu B Contenu B");
-	$image2->setImage("http://placehold.it/300x200?text=Image%20B");
-
-	$gallery->addElement($image1);
-	$gallery->addElement($image2);
-
-	$thread->send($gallery);
-
-	// Pause de 3 secondes puis redirection à l'index
-	sleep(3);
-	$thread->moveAndLoadState('EXAMPLES');
-
-});
-
-
-/*
- * ETAT: EXAMPLE_LIST
- */
-$app->state('EXAMPLE_LIST', function(Thread $thread, Message $message){
-
-
-	$list = new ListMessage();
-
-	for($i = 1; $i <= 4 ; $i++){
-		$image = new Element("Titre $i");
-		$image->setText("Contenu $i Contenu $i Contenu $i Contenu $i Contenu $i Contenu $i Contenu $i Contenu $i Contenu $i");
-		$image->setImage("http://placehold.it/300x200?text=Image%20$i");
-
-		$list->addElement($image);
-	}
-
-	$thread->send($list);
-
-	// Pause de 3 secondes puis redirection à l'index
-	sleep(3);
-	$thread->moveAndLoadState('EXAMPLES');
-
-});
-
-
-
-/*
- * ETAT: EXAMPLE_DATA
- */
-$app->state('EXAMPLE_DATA', function(Thread $thread, Message $message){
-
-	// Obtention des données associées au thread
-	if($message->isTreated()){ 	// Si on entre dans l'état (message traité ailleurs)
-		$cpt = 0;
-	}else{ // Sinon on récupère les données déjà stockées
-		$cpt = $thread->getData();
-	}
-
-	// Vérification du changement d'état, si ça n'a pas été traité avant
-	if($message instanceof CallbackMessage and ! $message->isTreated()){
-		if($message->getValue() === "DONE"){
-			$thread->send(new TextMessage("Compteur final: $cpt"));
-			$thread->moveAndLoadState("EXAMPLES");
-			return; // Interruption
-		}
-	}
-
-	// On incrémente
-	$cpt++ ;
-
-	// On sauvegarde la nouvelle donnée
-	$thread->setData($cpt);
-
-	// Envoi du résultat
-	$message = new TextMessage("Compteur actuel: $cpt");
-	$message->addButton(new Button("Plus!"));
-	$message->addButton(new Button("Fini...","DONE"));
-	$thread->send($message);
-
-});
-
-
-
-/*
- * ETAT: EXAMPLE_NLP
- */
-$app->state('EXAMPLE_NLP', function(Thread $thread, Message $message){
-
-
-	/*
-	 * Important: vous devez avoir associé ces données à un compte API.ai
-	 * Contactez le TechBar pour la mettre en place
-	 * */
-
-
-	// Vérification du changement d'état, si ça n'a pas été traité avant
-	if($message instanceof CallbackMessage and ! $message->isTreated()){
-		if($message->getValue() === "DONE"){
-			$thread->moveAndLoadState("EXAMPLES");
-			return; // Interruption
-		}
-	}
-
-
-	if(! $message->isTreated()){
-		if($data = $message->getApiAi() and isset($data['result'])){
-			foreach($data['result'] as $k => $value){
-				$thread->send(new TextMessage("$k :\n".json_encode($value, JSON_PRETTY_PRINT)));
-			}
-		}else{
-			$thread->send(new TextMessage("Aucune donnée retournée par API.ai"));
-		}
-		sleep(2);
-	}
-
-
-	// Envoi du résultat
-	$message = new TextMessage("Entrez un texte pour le parser:");
-	$message->addButton(new Button("Fini de jouer","DONE"));
-	$thread->send($message);
-
-});
-
-
-
-/*
- * ETAT: AskMeal
- */
- $app->state('ASK_MEAL', function(Thread $thread, Message $message){
-	
-	
-		/*
-		 * Important: vous devez avoir associé ces données à un compte API.ai
-		 * Contactez le TechBar pour la mettre en place
-		 * */
-	
-	
-		// Vérification du changement d'état, si ça n'a pas été traité avant
-		if($message instanceof CallbackMessage and ! $message->isTreated()){
-			if($message->getValue() === "DONE"){
-				$thread->moveAndLoadState("INTRO");
-				return; // Interruption
-			}
-		}
-	
-	
-		if(! $message->isTreated()){
-			$thread->send(new TextMessage(json_encode($message->getData()));
-			sleep(2);
-		}
-	
-	
-		// Envoi du résultat
-		$message = new TextMessage("Entrez un texte pour que je le copies ;)");
-		$message->addButton(new Button("Fini de jouer","DONE"));
-		$thread->send($message);
-	
-});
-	
-
-/*
- * ETAT: test traitement de la demande
- */
- $app->state('ASK_MEAL', function(Thread $thread, Message $message){
-	
-	
-		/*
-		 * Important: vous devez avoir associé ces données à un compte API.ai
-		 * Contactez le TechBar pour la mettre en place
-		 * */
-	
-	
-		// Vérification du changement d'état, si ça n'a pas été traité avant
-		if($message instanceof CallbackMessage and ! $message->isTreated()){
-			if($message->getValue() === "DONE"){
-				$thread->moveAndLoadState("INTRO");
-				return; // Interruption
-			}
-		}
-	
-	
-		if(! $message->isTreated()){
-			$thread->send(new TextMessage($message))
-			sleep(2);
-		}
-	
-	
-		// Envoi du résultat
-		$message = new TextMessage("Entrez un texte pour que je le copies ;)");
-		$message->addButton(new Button("Fini de jouer","DONE"));
-		$thread->send($message);
-	
-});
-
+include 'module1.php';
 // Récupération de la requête
 $result = $app->run();
-
-
 // Show result
 var_dump($result);
